@@ -7,16 +7,7 @@
 
 template<typename... T>
 ArcheType ArcheType::create() {
-    auto archetype = ArcheType();
-    archetype.setSig(Sig::createSig<T...>());
-    ((archetype.arrays[TypeId<T>::id] = ComponentArray<T>()), ...);
-    return archetype;
-}
-
-ArcheType ArcheType::create(Signature sig) {
-    auto archetype = ArcheType();
-    archetype.setSig(sig);
-
+    auto archetype = ArcheType(Sig::createSig<T...>());
     ((archetype.arrays[TypeId<T>::id] = ComponentArray<T>()), ...);
     return archetype;
 }
@@ -37,27 +28,23 @@ void ArcheType::removeEntity(entKey entity) {
     indices.erase(entity);
 }
 
-void ArcheType::setSig(const Signature& sig) {
-    this->sig = sig;
-}
-
-size_t ArcheType::getSize() {
-    return entities.size();
-}
-
 const Signature& ArcheType::getSig() const {
     return sig;
-}
-
-template<typename... T>
-std::tuple<T&& ...> ArcheType::getComponents(entKey entity) {
-    return std::make_tuple((static_cast<ComponentArray<T>>(arrays.at(TypeId<T>::id))[indices.at(entity)], ...));
 }
 
 void ArcheType::transferEntity(entKey entity, ArcheType& other) {
     std::swap(entities[indices.at(entity)], entities.back());
     entities.pop_back();
     for(auto & [id, array] : arrays)
-        array.transerComponent(other.arrays.at(id), indices.at(entity));
+        array->transerComponent(*other.arrays.at(id), indices.at(entity));
+}
+
+template<typename... T>
+std::tuple<T& ...> ArcheType::getComponents(entKey entity) {
+    return std::tie((static_cast<ComponentArray<T>>(arrays.at(TypeId<T>::id))[indices.at(entity)], ...));
+}
+
+template<typename... T>
+std::tuple<const T&...> ArcheType::getComponents(entKey entity) const {
 }
 

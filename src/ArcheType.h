@@ -7,6 +7,7 @@
 #include <map>
 #include <optional>
 #include <queue>
+#include <memory>
 #include "IComponentArray.h"
 #include "types.h"
 
@@ -20,12 +21,16 @@ struct Record{
 
 class ArcheType {
 public:
-    template<typename... T>
-    static ArcheType create();
-    static ArcheType create(Signature sig);
+    ArcheType(Signature sig): sig(sig){}
 
     template<typename... T>
-    std::tuple<T&&...> getComponents(entKey entity);
+    static ArcheType create();
+
+    template<typename... T>
+    [[nodiscard]] std::tuple<T&...> getComponents(entKey entity);
+
+    template<typename... T>
+    [[nodiscard]] std::tuple<const T&...> getComponents(entKey entity) const;
 
     void transferEntity(entKey entity, ArcheType& other);
 
@@ -33,13 +38,11 @@ public:
     void addEntity(entKey entity, T&&... components);
 
     void removeEntity(entKey entity);
-    size_t getSize();
 
     [[nodiscard]] const Signature& getSig() const;
-    void setSig(const Signature& sig);
 private:
     Signature sig;
-    std::map<componentId, IComponentArray&> arrays;
+    std::map<componentId, std::unique_ptr<IComponentArray>> arrays;
     std::vector<entKey> entities;
     std::map<entKey, size_t> indices;
 };

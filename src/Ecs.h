@@ -24,7 +24,7 @@ public:
     void addComponents(entKey entity);
 
     template<typename... T>
-    std::optional<std::tuple<T&&...>> getComponents(entKey entity);
+    std::optional<std::tuple<T&...>> getComponents(entKey entity);
 
     template<typename... T>
     void removeComponents(entKey entity);
@@ -40,7 +40,7 @@ private:
     std::queue<entKey>freeKeys;
     entKey currKey{};
 
-    std::map<entKey, ArcheType&> homes;
+    std::map<entKey, std::reference_wrapper<ArcheType>> homes;
 };
 
 
@@ -85,7 +85,7 @@ void Ecs::addComponents(entKey entity) {
 }
 
 template<typename... T>
-std::optional<std::tuple<T&&...>> Ecs::getComponents(entKey entity) {
+std::optional<std::tuple<T&...>> Ecs::getComponents(entKey entity) {
     if(auto archeType = getArcheType<T...>())
         return archeType->getComponents();
     return std::nullopt;
