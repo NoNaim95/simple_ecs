@@ -26,5 +26,9 @@ namespace Sig{
         (sig.set(TypeId<T>::id), ...);
         return sig;
     }
-
+    struct Comparer {
+        bool operator() (const Signature &b1, const Signature &b2) const {
+            return b1.to_ulong() < b2.to_ulong();
+        }
+    };
 }

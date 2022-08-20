@@ -15,13 +15,13 @@
 class Ecs {
 public:
     template<typename... T>
-    entKey makeEntity(T... components);
+    entKey makeEntity(T&&... components);
 
 
     void removeEntity(entKey entity);
 
     template<typename... T>
-    void addComponents(entKey entity);
+    void addComponents(entKey entity, T&& ... components);
 
     template<typename... T>
     std::optional<std::tuple<T&...>> getComponents(entKey entity);
@@ -32,10 +32,10 @@ public:
 private:
     template<typename... T>
     std::optional<std::reference_wrapper<ArcheType>> getArcheType();
-    std::optional<std::reference_wrapper<ArcheType>> getArcheType(Signature sig);
+    std::optional<std::reference_wrapper<ArcheType>> getArcheType(const Signature& sig);
 
 private:
-    std::vector<ArcheType> archetypes;
+    std::map<Signature, ArcheType, Sig::Comparer> archetypes;
 
     std::queue<entKey>freeKeys;
     entKey currKey{};
@@ -44,8 +44,9 @@ private:
 };
 
 
+
 template<typename... T>
-entKey Ecs::makeEntity(T... components) {
+entKey Ecs::makeEntity(T&&... components) {
     // determining if entkey will be taken from queue or currKey
     entKey entKey;
     if(!freeKeys.empty()){
@@ -56,38 +57,47 @@ entKey Ecs::makeEntity(T... components) {
         entKey = currKey++;
     }
 
-    auto sig = createSig<T...>();
-    auto archeTypeIt = std::find_if(archetypes.begin(), archetypes.end(),[sig](auto it){return it->getSig() == sig;});
-    // determine if we can put this entity in an existing ArcheType or if we have to create a new one
-    if(archeTypeIt != archetypes.end()){
-        archeTypeIt->addEntity(entKey, components...);
-    }else{
-        archetypes.push_back(ArcheType::create<T...>());
-        archetypes.back().addEntity(entKey, components...);
+    auto sig = Sig::createSig<T...>();
+
+    if(auto it = archetypes.find(sig); it != archetypes.end())
+        it->second.addEntity(entKey, std::forward<T>(components)...);
+    else{
+        archetypes[sig] = ArcheType::create<T...>();
+        archetypes.at(sig).addEntity(entKey, std::forward<T>(components)...);
     }
 
     return entKey;
 }
 
 void Ecs::removeEntity(entKey entity) {
-    homes.at(entity).removeEntity(entity);
+    homes.at(entity).get().removeEntity(entity);
+    homes.erase(entity);
 }
 
 template<typename... T>
-void Ecs::addComponents(entKey entity) {
-    auto oldSig = homes.at(entity).getSig();
-    Signature newSig = Sig::createSig<T...>() | oldSig;
+void Ecs::addComponents(entKey entity, T&& ... components) {
+
+    Signature newSig = Sig::createSig<T...>() | homes.at(entity).get().getSig();
+
     if(auto arch = getArcheType(newSig))
-        homes.at(entity).transferEntity(entity, *arch);
+        // Archetype found, use it
+        homes.at(entity).get().transferEntity(entity, *arch);
     else{
-        ArcheType::create<>()
+        // Archetype not found, create one and use it
+
+        ArcheType arche = ArcheType::create<T...>();
+        arche.addEntity(components...);
+
+        archetypes[newSig] = arche;
+        arche.transferEntity(entity, *arch);
+        homes[entity] = arche;
     }
 }
 
 template<typename... T>
 std::optional<std::tuple<T&...>> Ecs::getComponents(entKey entity) {
     if(auto archeType = getArcheType<T...>())
-        return archeType->getComponents();
+        return archeType->get().getComponents(entity);
     return std::nullopt;
 }
 
@@ -96,13 +106,25 @@ std::optional<std::reference_wrapper<ArcheType>> Ecs::getArcheType() {
     return getArcheType(Sig::createSig<T...>());
 }
 
-std::optional<std::reference_wrapper<ArcheType>> Ecs::getArcheType(Signature sig) {
-    auto it = std::find_if(archetypes.begin(), archetypes.end(),[sig](auto arch){return arch.getSig() == sig;});
-    if(it == archetypes.end())
-        return std::nullopt;
-    return *it;
+std::optional<std::reference_wrapper<ArcheType>> Ecs::getArcheType(const Signature& sig) {
+    if(auto it = archetypes.find(sig); it != archetypes.end())
+        return std::ref(it->second);
+    return std::nullopt;
 }
 
 template<typename... T>
 void Ecs::removeComponents(entKey entity) {
+    Signature newSig = homes.at(entity).get().getSig();
+    (newSig.reset(TypeId<T>::id), ...);
+    if(auto arch = getArcheType(newSig))
+        // Archetype found, use it
+        homes.at(entity).get().transferEntity(entity, *arch);
+    else{
+        // Archetype not found, create one and use it
+
+        ArcheType arche = ArcheType(newSig);
+        archetypes[newSig] = arche;
+        arche.transferEntity(entity, *arch);
+        homes[entity] = arche;
+    }
 }

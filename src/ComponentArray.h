@@ -16,6 +16,7 @@ public:
     const std::vector<T>& getArray() const{return array;}
 
     void transerComponent(IComponentArray& other, size_t idx) override;
+    std::unique_ptr<IComponentArray> emptyClone() override;
 
     T& operator[](size_t idx);
     const T& operator[](size_t idx)const;
@@ -45,4 +46,9 @@ template<typename T>
 void ComponentArray<T>::transerComponent(IComponentArray& other, size_t idx) {
     static_cast<decltype(*this)>(other).array.push_back(this->array[idx]);
     removeComponent(idx);
+}
+
+template<typename T>
+std::unique_ptr<IComponentArray> ComponentArray<T>::emptyClone() {
+    return std::make_unique<std::remove_reference_t<decltype(*this)>>();
 }
