@@ -47,7 +47,7 @@ private:
 
 template<typename... T>
 entKey Ecs::makeEntity(T&&... components) {
-    // determining if entkey will be taken from queue or currKey
+    // determining if entKey will be taken from queue or currKey
     entKey entKey;
     if(!freeKeys.empty()){
         entKey = freeKeys.front();
