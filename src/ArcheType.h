@@ -33,7 +33,6 @@ public:
 
     template<typename... T>
     void addEntity(entKey entity, T&&... components);
-    void addEntity(entKey entity);
 
     void removeEntity(entKey entity);
 
@@ -43,6 +42,8 @@ private:
     std::map<componentId, std::unique_ptr<IComponentArray>> arrays;
     std::vector<entKey> entities;
     std::map<entKey, size_t> indices;
+
+    void addEntity(entKey entity);
 };
 
 
