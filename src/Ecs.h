@@ -59,12 +59,17 @@ entKey Ecs::makeEntity(T&&... components) {
 
     auto sig = Sig::createSig<T...>();
 
-    if(auto it = archetypes.find(sig); it != archetypes.end())
-        it->second.addEntity(entKey, std::forward<T>(components)...);
+    ArcheType* arche;
+    // determine if an ArcheType has to be created
+    if(auto it = archetypes.find(sig); it != archetypes.end()){
+        arche = &it->second;
+    }
     else{
         archetypes[sig] = ArcheType::create<T...>();
-        archetypes.at(sig).addEntity(entKey, std::forward<T>(components)...);
+        arche = &archetypes.at(sig);
     }
+    arche->addEntity(entKey, std::forward<T>(components)...);
+    homes.emplace(entKey,*arche);
 
     return entKey;
 }
@@ -72,6 +77,7 @@ entKey Ecs::makeEntity(T&&... components) {
 void Ecs::removeEntity(entKey entity) {
     homes.at(entity).get().removeEntity(entity);
     homes.erase(entity);
+    freeKeys.push(entity);
 }
 
 template<typename... T>
@@ -79,25 +85,25 @@ void Ecs::addComponents(entKey entity, T&& ... components) {
 
     Signature newSig = Sig::createSig<T...>() | homes.at(entity).get().getSig();
 
-    if(auto arch = getArcheType(newSig))
+    if(auto arch = getArcheType(newSig)){
         // Archetype found, use it
         homes.at(entity).get().transferEntity(entity, *arch);
+        homes.insert_or_assign(entity, std::ref(*arch));
+    }
     else{
         // Archetype not found, create one and use it
+        archetypes[newSig] = ArcheType::create<T...>(newSig);
+        homes.at(entity).get().transferEntity(entity, archetypes.at(newSig));
+        homes.insert_or_assign(entity, archetypes.at(newSig));
 
-        ArcheType arche = ArcheType::create<T...>();
-        arche.addEntity(components...);
-
-        archetypes[newSig] = arche;
-        arche.transferEntity(entity, *arch);
-        homes[entity] = arche;
+        archetypes.at(newSig).addComponents( std::forward<T>(components)...);
     }
 }
 
 template<typename... T>
 std::optional<std::tuple<T&...>> Ecs::getComponents(entKey entity) {
-    if(auto archeType = getArcheType<T...>())
-        return archeType->get().getComponents(entity);
+    if(homes.contains(entity))
+        return  homes.at(entity).get().template getComponents<T...>(entity);
     return std::nullopt;
 }
 
@@ -116,15 +122,15 @@ template<typename... T>
 void Ecs::removeComponents(entKey entity) {
     Signature newSig = homes.at(entity).get().getSig();
     (newSig.reset(TypeId<T>::id), ...);
-    if(auto arch = getArcheType(newSig))
+    if(auto arch = getArcheType(newSig)){
         // Archetype found, use it
         homes.at(entity).get().transferEntity(entity, *arch);
+        homes.insert_or_assign(entity, std::ref(*arch));
+    }
     else{
         // Archetype not found, create one and use it
-
-        ArcheType arche = ArcheType(newSig);
-        archetypes[newSig] = arche;
-        arche.transferEntity(entity, *arch);
-        homes[entity] = arche;
+        archetypes[newSig] = ArcheType(newSig);
+        archetypes.at(newSig).transferEntity(entity, *arch);
+        homes.insert_or_assign(entity, std::ref(archetypes.at(newSig)));
     }
 }
